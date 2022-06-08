@@ -1,5 +1,8 @@
 # Learning Human Viewpoint Preferences from Sparsely Annotated Models
+We provide the first deep learning approach to learn the human viewpoint preference directly from annotated data. Moreover, we provide several designs to compute such metrics in a few milliseconds enabling its use in real-time applications.
 
+![](imgs/teaser.jpg)
+See our [video](https://cloudstore.uni-ulm.de/s/PKx3doHdbpWZWc6).
 ## Todos
   - Small demo.
   - Training and evaluation code.
