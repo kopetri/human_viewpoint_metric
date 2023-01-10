@@ -1,0 +1,10 @@
+scikit-learn
+matplotlib
+numpy
+opencv-python
+scipy
+torch
+torchvision
+pytorch_lightning
+pytorch_utils
+git+https://github.com/kopetri/PyTorch-Learning-Utils@master#egg=pytorch_utils
