@@ -264,6 +264,77 @@ class NeuralViewLabelDataset(torch.utils.data.Dataset):
         return pairs
 
 
+class PreferencesDataset(torch.utils.data.Dataset):
+    """Dataset that pairs each rendered image with its human view-preference score.
+
+    For every image in ``metric_path/{class}/{split}/``, the corresponding JSON
+    file provides the camera's ``cartesian_coords``.  The nearest point on the
+    shared Fibonacci sphere (loaded from ``prefs_path/fibonacci.npy``) is found
+    by Euclidean distance, and the score at that index is read from the per-model
+    ``.npy`` file in ``prefs_path/{class}/{split}/``.
+
+    Images whose ``.npy`` counterpart does not exist are silently skipped.
+    Scores are normalised to [0, 1] based on the total number of Fibonacci
+    points (i.e. divided by ``len(fibonacci) - 1``).
+    """
+
+    def __init__(self, metric_path, prefs_path, split, classes=None):
+        super().__init__()
+        assert split in ["train", "test"], f"unknown split: {split}"
+
+        metric_root = Path(metric_path)
+        prefs_root = Path(prefs_path)
+
+        self.fibonacci = np.load(prefs_root / "fibonacci.npy")  # (1000, 3)
+        self.n_fib = len(self.fibonacci)
+
+        # Cache loaded .npy score arrays keyed by their path to avoid redundant I/O
+        self._score_cache: dict[Path, np.ndarray] = {}
+
+        all_images = [
+            img
+            for img in metric_root.glob("**/*.jpg")
+            if "mask" not in img.name and "depth" not in img.name and img.parent.name == split
+        ]
+
+        if classes is not None:
+            all_images = [img for img in all_images if img.parents[1].name in classes]
+
+        self.samples = []  # list of (img_path, json_path, npy_path)
+        for img in sorted(all_images):
+            cls = img.parents[1].name
+            model_stem = img.stem.split(".off_camera_")[0]
+            npy = prefs_root / cls / split / (model_stem + ".npy")
+            if not npy.exists():
+                continue
+            json_path = img.with_suffix(".json")
+            if not json_path.exists():
+                continue
+            self.samples.append((img, json_path, npy))
+
+        print(f"PreferencesDataset [{split}]: {len(self.samples)} images")
+
+    def __len__(self):
+        return len(self.samples)
+
+    def _get_score(self, json_path: Path, npy_path: Path) -> float:
+        with open(json_path) as f:
+            coord = np.array(json.load(f)["cartesian_coords"])
+        nearest_idx = int(np.argmin(np.linalg.norm(self.fibonacci - coord, axis=1)))
+
+        if npy_path not in self._score_cache:
+            self._score_cache[npy_path] = np.load(npy_path)
+        scores = self._score_cache[npy_path]
+
+        return float(scores[nearest_idx]) / (self.n_fib - 1)
+
+    def __getitem__(self, index):
+        img_path, json_path, npy_path = self.samples[index]
+        image = TF.to_tensor(load_rgb(img_path))
+        score = torch.tensor([self._get_score(json_path, npy_path)], dtype=torch.float32)
+        return image, score
+
+
 if __name__ == "__main__":
     dataset = ViewDataset(
         "G:/projects/3DAnnotation/additional_study",

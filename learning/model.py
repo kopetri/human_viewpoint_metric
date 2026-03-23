@@ -2,14 +2,15 @@ from argparse import Namespace
 from pathlib import Path
 from zipfile import ZipFile
 
-import lightning.pytorch as pl
+import lightning as L
+import lightning.pytorch.loggers as pl_loggers
 import torch
 
 from learning.metrics import BinaryClassMetrics, accuracy
 from learning.network import ViewModel
 
 
-class LightningModule(pl.LightningModule):
+class LightningModule(L.LightningModule):
     """Inlined from pytorch_utils.module — no external dependency needed."""
 
     def __init__(self, opt=None, **kwargs):
@@ -46,11 +47,11 @@ class LightningModule(pl.LightningModule):
         )
 
     def log_image(self, key, images, **kwargs):
-        if self.logger and isinstance(self.logger, pl.loggers.WandbLogger):
+        if self.logger and isinstance(self.logger, pl_loggers.WandbLogger):
             self.logger.log_image(key=key, images=images, **kwargs)
 
     def on_save_checkpoint(self, _checkpoint) -> None:
-        if not (isinstance(self.logger, pl.loggers.WandbLogger) and getattr(self.opt, "save_code_base", False)):
+        if not (isinstance(self.logger, pl_loggers.WandbLogger) and getattr(self.opt, "save_code_base", False)):
             return
         path = Path(".", self.logger.experiment.project, self.logger.experiment.id, "code")
         zipfile = path / "code.zip"
@@ -151,7 +152,7 @@ class ViewQualityModel(LightningModule):
         return optimizer
 
 
-class LabelingModel(pl.LightningModule):
+class LabelingModel(L.LightningModule):
     def __init__(self, hparams):
         super().__init__()
         self.model = ViewModel(mlp_layers=hparams.mlp_layers, dropout=hparams.dropout, sigmoid=False)

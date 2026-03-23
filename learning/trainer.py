@@ -4,7 +4,8 @@ from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
 import lightning as L
-import lightning.pytorch as pl
+import lightning.pytorch.callbacks as pl_callbacks
+import lightning.pytorch.loggers as pl_loggers
 import torch
 
 
@@ -26,7 +27,7 @@ def parse_ckpt(path, return_first=True, pattern=None):
     return ckpts
 
 
-class Trainer(pl.Trainer):
+class Trainer(L.Trainer):
     def __init__(self, project_name):
         self.project_name = project_name
         self.parser = ArgumentParser("Training of {}".format(project_name))
@@ -87,7 +88,7 @@ class Trainer(pl.Trainer):
         if self.__args__.name is None or self.__args__.dev:
             logger = None
         else:
-            logger = pl.loggers.WandbLogger(
+            logger = pl_loggers.WandbLogger(
                 project=self.project_name,
                 name=self.__args__.name,
                 log_model=bool(self.__args__.save_code_base),
@@ -96,10 +97,10 @@ class Trainer(pl.Trainer):
         callbacks = []
 
         if self.__args__.learning_rate_decay and logger:
-            callbacks += [pl.callbacks.LearningRateMonitor()]
+            callbacks += [pl_callbacks.LearningRateMonitor()]
 
         callbacks += [
-            pl.callbacks.ModelCheckpoint(
+            pl_callbacks.ModelCheckpoint(
                 verbose=True,
                 save_top_k=1,
                 filename="{epoch}-{" + metric + "}",
@@ -111,7 +112,7 @@ class Trainer(pl.Trainer):
 
         if self.__args__.ckpt_every_n_epochs:
             callbacks += [
-                pl.callbacks.ModelCheckpoint(
+                pl_callbacks.ModelCheckpoint(
                     verbose=True,
                     save_top_k=-1,
                     every_n_epochs=self.__args__.ckpt_every_n_epochs,
@@ -121,7 +122,7 @@ class Trainer(pl.Trainer):
 
         if self.__args__.ckpt_every_n_steps:
             callbacks += [
-                pl.callbacks.ModelCheckpoint(
+                pl_callbacks.ModelCheckpoint(
                     verbose=True,
                     save_top_k=-1,
                     every_n_train_steps=self.__args__.ckpt_every_n_steps,
@@ -131,7 +132,7 @@ class Trainer(pl.Trainer):
 
         if self.__args__.early_stop_patience > 0:
             callbacks += [
-                pl.callbacks.EarlyStopping(
+                pl_callbacks.EarlyStopping(
                     monitor=metric,
                     min_delta=0.0,
                     patience=self.__args__.early_stop_patience,
