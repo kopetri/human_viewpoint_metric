@@ -71,8 +71,23 @@ class LightningModule(L.LightningModule):
 
 
 class ViewQualityModel(LightningModule):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        learning_rate: float = 1e-4,
+        mlp_layers: list | None = None,
+        dropout: float = 0.2,
+        decoder: str = "binary",
+        learning_rate_decay: float = 0.0,
+        reduce_lr_on_plateau: int = 0,
+    ):
+        super().__init__(
+            learning_rate=learning_rate,
+            mlp_layers=mlp_layers or [256, 64],
+            dropout=dropout,
+            decoder=decoder,
+            learning_rate_decay=learning_rate_decay,
+            reduce_lr_on_plateau=reduce_lr_on_plateau,
+        )
         decoder = self.opt.decoder if "decoder" in self.opt else "binary"
         self.model = ViewModel(
             mlp_layers=self.opt.mlp_layers,

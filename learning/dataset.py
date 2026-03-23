@@ -2,10 +2,12 @@ import json
 from itertools import combinations
 from pathlib import Path
 
+import lightning as L
 import numpy as np
 import torch
 import torchvision.transforms.functional as TF
 from PIL import Image
+from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 
@@ -333,6 +335,60 @@ class PreferencesDataset(torch.utils.data.Dataset):
         image = TF.to_tensor(load_rgb(img_path))
         score = torch.tensor([self._get_score(json_path, npy_path)], dtype=torch.float32)
         return image, score
+
+
+class ViewDataModule(L.LightningDataModule):
+    def __init__(
+        self,
+        dataset_path: str,
+        valid_path: str = "",
+        batch_size: int = 16,
+        num_workers: int = 8,
+        classes: list | None = None,
+        use_rot: bool = True,
+        filter_agree: bool = False,
+        discard_rate: float = 0.0,
+        use_triplets: bool = True,
+        n_models: int = -1,
+    ):
+        super().__init__()
+        self.dataset_path = dataset_path
+        self.valid_path = valid_path or dataset_path
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.classes = classes or CLASSES
+        self.use_rot = use_rot
+        self.filter_agree = filter_agree
+        self.discard_rate = discard_rate
+        self.use_triplets = use_triplets
+        self.n_models = n_models
+
+    def train_dataloader(self):
+        dataset = ViewDataset(
+            path=self.dataset_path,
+            split="train",
+            use_rot=self.use_rot,
+            use_failed=False,
+            filter_agree=self.filter_agree,
+            classes=self.classes,
+            discard_rate=self.discard_rate,
+            use_triplets=self.use_triplets,
+            n_instances=self.n_models,
+        )
+        return DataLoader(
+            dataset, batch_size=self.batch_size, shuffle=True, drop_last=True, num_workers=self.num_workers
+        )
+
+    def val_dataloader(self):
+        dataset = ViewDataset(
+            path=self.valid_path,
+            split="valid",
+            use_rot=False,
+            use_failed=False,
+            filter_agree=self.filter_agree,
+            classes=self.classes,
+        )
+        return DataLoader(dataset, batch_size=1, shuffle=False, num_workers=self.num_workers)
 
 
 if __name__ == "__main__":
