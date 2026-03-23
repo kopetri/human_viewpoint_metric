@@ -167,6 +167,64 @@ class ViewQualityModel(LightningModule):
         return optimizer
 
 
+class ViewpointScoreModel(LightningModule):
+    """Regresses a single image to a normalised human view-preference score in [0, 1]."""
+
+    def __init__(
+        self,
+        learning_rate: float = 1e-4,
+        mlp_layers: list | None = None,
+        dropout: float = 0.2,
+        learning_rate_decay: float = 0.0,
+        reduce_lr_on_plateau: int = 0,
+    ):
+        super().__init__(
+            learning_rate=learning_rate,
+            mlp_layers=mlp_layers or [256, 64],
+            dropout=dropout,
+            learning_rate_decay=learning_rate_decay,
+            reduce_lr_on_plateau=reduce_lr_on_plateau,
+        )
+        self.model = ViewModel(
+            mlp_layers=self.opt.mlp_layers,
+            dropout=self.opt.dropout,
+            sigmoid=False,
+            decoder="goodness",
+        )
+        self.criterion = torch.nn.MSELoss()
+
+    def forward(self, batch, batch_idx, split):
+        image, score = batch
+        batch_size = image.shape[0]
+        pred = self.model(image).sigmoid()  # (B, 1) → [0, 1]
+        loss = self.criterion(pred, score)
+        self.log_value("loss", loss, split, batch_size)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.opt.learning_rate)
+        if self.opt.learning_rate_decay > 0:
+            scheduler = {
+                "scheduler": torch.optim.lr_scheduler.MultiplicativeLR(
+                    optimizer,
+                    lr_lambda=[lambda _: self.opt.learning_rate_decay],
+                ),
+                "interval": "step",
+                "frequency": 1,
+                "strict": True,
+            }
+            return [optimizer], [scheduler]
+        if self.opt.reduce_lr_on_plateau > 0:
+            scheduler = {
+                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                    optimizer, "min", patience=self.opt.reduce_lr_on_plateau
+                ),
+                "monitor": "valid_loss",
+            }
+            return [optimizer], [scheduler]
+        return optimizer
+
+
 class LabelingModel(L.LightningModule):
     def __init__(self, hparams):
         super().__init__()

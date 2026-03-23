@@ -337,6 +337,43 @@ class PreferencesDataset(torch.utils.data.Dataset):
         return image, score
 
 
+class PreferencesDataModule(L.LightningDataModule):
+    def __init__(
+        self,
+        metric_path: str,
+        prefs_path: str,
+        batch_size: int = 16,
+        num_workers: int = 8,
+        classes: list | None = None,
+    ):
+        super().__init__()
+        self.metric_path = metric_path
+        self.prefs_path = prefs_path
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.classes = classes
+
+    def train_dataloader(self):
+        dataset = PreferencesDataset(
+            metric_path=self.metric_path,
+            prefs_path=self.prefs_path,
+            split="train",
+            classes=self.classes,
+        )
+        return DataLoader(
+            dataset, batch_size=self.batch_size, shuffle=True, drop_last=True, num_workers=self.num_workers
+        )
+
+    def val_dataloader(self):
+        dataset = PreferencesDataset(
+            metric_path=self.metric_path,
+            prefs_path=self.prefs_path,
+            split="test",
+            classes=self.classes,
+        )
+        return DataLoader(dataset, batch_size=1, shuffle=False, num_workers=self.num_workers)
+
+
 class ViewDataModule(L.LightningDataModule):
     def __init__(
         self,

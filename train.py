@@ -1,12 +1,15 @@
+import lightning
 from lightning.pytorch.cli import LightningCLI
-
-from learning.dataset import ViewDataModule
-from learning.model import ViewQualityModel
 
 
 def cli_main():
     """Entry point for LightningCLI training."""
-    LightningCLI(ViewQualityModel, ViewDataModule)
+    LightningCLI(
+        lightning.LightningModule,
+        lightning.LightningDataModule,
+        subclass_mode_model=True,
+        subclass_mode_data=True,
+    )
 
 
 if __name__ == "__main__":

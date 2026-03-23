@@ -1,0 +1,22 @@
+seed_everything: true
+trainer:
+  accelerator: auto
+  devices: auto
+  precision: 16-mixed
+  max_epochs: 50
+  log_every_n_steps: 50
+model:
+  class_path: learning.model.ViewpointScoreModel
+  init_args:
+    learning_rate: 0.0001
+    mlp_layers:
+      - 256
+      - 64
+    dropout: 0.2
+data:
+  class_path: learning.dataset.PreferencesDataModule
+  init_args:
+    metric_path: null  # required: path to human_viewpoint_metric folder
+    prefs_path: null   # required: path to human_view_preferences folder
+    batch_size: 16
+    num_workers: 8
