@@ -1,42 +1,80 @@
-import torch
-from pathlib import Path
-from tqdm import tqdm
-from PIL import Image
-import json 
-import torchvision.transforms.functional as TF
-import torchvision.transforms as transforms
-import numpy as np
+import json
 from itertools import combinations
+from pathlib import Path
 
-CLASSES = ['airplane', 'bathtub', 'bed', 'bench', 'bookshelf', 'bottle', 'car', 'chair', 'desk', 'door', 'dresser', 'flower_pot', 'guitar', 'keyboard', 'lamp', 'laptop', 'monitor', 'night_stand', 'piano', 'plant', 'radio', 'sink', 'sofa', 'table', 'tent', 'toilet', 'tv_stand', 'vase']
+import numpy as np
+import torch
+import torchvision.transforms.functional as TF
+from PIL import Image
+from torchvision import transforms
+from tqdm import tqdm
+
+CLASSES = [
+    "airplane",
+    "bathtub",
+    "bed",
+    "bench",
+    "bookshelf",
+    "bottle",
+    "car",
+    "chair",
+    "desk",
+    "door",
+    "dresser",
+    "flower_pot",
+    "guitar",
+    "keyboard",
+    "lamp",
+    "laptop",
+    "monitor",
+    "night_stand",
+    "piano",
+    "plant",
+    "radio",
+    "sink",
+    "sofa",
+    "table",
+    "tent",
+    "toilet",
+    "tv_stand",
+    "vase",
+]
+
 
 def add_noise(label, mean=0.0, std=0.2):
-    label_noise = label + torch.normal(mean=mean, std=std, size=(1,1)) # add noise
+    """Add Gaussian noise to a label, reverting if it changes the class."""
+    label_noise = label + torch.normal(mean=mean, std=std, size=(1, 1))
     label_noise = label_noise.clamp(0, 1).reshape(1)
     if label_noise.round() == label:
         return label_noise
-    else:
-        return label # if the noise changed the label return original label
+    return label  # if the noise changed the label return original label
+
 
 def anno2int(anno):
-    label = anno['label']
-    if label == 'best':
+    """Convert annotation dict to numeric label (best=2, second=1, worst=0)."""
+    label = anno["label"]
+    if label == "best":
         return 2.0
-    elif label == 'second':
+    if label == "second":
         return 1.0
-    elif label == 'worst':
+    if label == "worst":
         return 0.0
     raise ValueError("Invalid label", label)
 
+
 def load_rgb(img_path):
-    image = Image.open(img_path).convert('RGB')
-    return image
+    """Load an image from disk and convert to RGB."""
+    return Image.open(img_path).convert("RGB")
+
 
 def convert2label(data, convert_func, use_failed):
+    """Filter annotations and apply a label conversion function."""
     return [convert_func(anno) for anno in data if ((not anno["failed"]) or use_failed)]
 
+
 def parse_label(anno_file, use_failed, convert_labels):
-    with open(anno_file, "r") as json_file:
+    """Load an annotation JSON file and return converted labels."""
+    with open(anno_file) as json_file:
         data = json.load(json_file)
         if isinstance(data, dict):
             data = data["annotations"]
@@ -47,20 +85,33 @@ def parse_label(anno_file, use_failed, convert_labels):
         assert len(labels) > 0, "No labels!!"
         return labels
 
-def data_augment(imgA, imgB, use_rot):
-    if np.random.uniform() > 0.5:
+
+def data_augment(img_a, img_b, use_rot):
+    """Apply random color jitter and optional rotation augmentation to an image pair."""
+    if np.random.uniform() > 0.5:  # noqa: NPY002, PLR2004
         color_jitter = transforms.ColorJitter(0.4, 0.4, 0.4)
-        imgA = color_jitter(imgA)
-        imgB = color_jitter(imgB)
-    if np.random.uniform() > 0.5 and use_rot:
+        img_a = color_jitter(img_a)
+        img_b = color_jitter(img_b)
+    if np.random.uniform() > 0.5 and use_rot:  # noqa: NPY002, PLR2004
         rand_rot = transforms.RandomRotation(90)
-        imgA = rand_rot(imgA)
-        imgB = rand_rot(imgB)
-    return imgA, imgB
+        img_a = rand_rot(img_a)
+        img_b = rand_rot(img_b)
+    return img_a, img_b
 
 
 class ViewDataset(torch.utils.data.Dataset):
-    def __init__(self, path, split, use_failed=False, classes=None, filter_agree=False, discard_rate=0.0, use_rot=False, use_triplets=True, n_instances=-1):
+    def __init__(
+        self,
+        path,
+        split,
+        use_failed=False,
+        classes=None,
+        filter_agree=False,
+        discard_rate=0.0,
+        use_rot=False,
+        use_triplets=True,
+        n_instances=-1,
+    ):
         super(ViewDataset, self).__init__()
         assert split in ["train", "valid", "test", "all"], "unknown data set split: {}".format(split)
         self.filter_agree = filter_agree
@@ -68,9 +119,13 @@ class ViewDataset(torch.utils.data.Dataset):
         self.split = split
         self.use_triplets = use_triplets
         self.use_rot = use_rot
-        self.images = [img for img in Path(path).glob("**/*") if img.suffix == ".jpg" and not "mask" in img.name and (img.parent.name == split or split == 'all')]
-        self.models = sorted(list(set([model.as_posix().split(".off")[0] for model in self.images])))
-        self.models = [model for model in self.models if classes is None or any([c in model for c in classes])]
+        self.images = [
+            img
+            for img in Path(path).glob("**/*")
+            if img.suffix == ".jpg" and "mask" not in img.name and split in (img.parent.name, "all")
+        ]
+        self.models = sorted({model.as_posix().split(".off")[0] for model in self.images})
+        self.models = [model for model in self.models if classes is None or any(c in model for c in classes)]
         self.models, self.images = self.filter_instances(n_instances)
         self.n_triplets = self.parse_triplet_size()
         self.pairs = self.make_pairs()
@@ -91,9 +146,9 @@ class ViewDataset(torch.utils.data.Dataset):
         return (np.max([int(Path(i).stem.split("_")[-1]) for i in self.images]) // 3) + 1
 
     def filter_instances(self, n):
-        if n < 1: return self.models, self.images
-        classes = list(set([Path(m).parents[1].name for m in self.models]))
-        classes.sort()
+        if n < 1:
+            return self.models, self.images
+        classes = sorted({Path(m).parents[1].name for m in self.models})
         models = []
         for cls in classes:
             models += [m for m in self.models if Path(m).parents[1].name == cls][0:n]
@@ -102,11 +157,11 @@ class ViewDataset(torch.utils.data.Dataset):
         return models, images
 
     def discard(self, rate):
-        np.random.seed(1337)
-        N = len(self.pairs)
-        n = int((1.0 - rate) * N)
-        indices = np.arange(N)
-        np.random.shuffle(indices)
+        np.random.seed(1337)  # noqa: NPY002
+        count = len(self.pairs)
+        n = int((1.0 - rate) * count)
+        indices = np.arange(count)
+        np.random.shuffle(indices)  # noqa: NPY002
         indices = indices[0:n]
         self.pairs = np.array(self.pairs)[indices].tolist()
 
@@ -115,21 +170,21 @@ class ViewDataset(torch.utils.data.Dataset):
         image0 = load_rgb(x0)
         image1 = load_rgb(x1)
 
-        if self.split == 'train':
+        if self.split == "train":
             image0, image1 = data_augment(image0, image1, self.use_rot)
 
         image0 = TF.to_tensor(image0)
         image1 = TF.to_tensor(image1)
 
-        assert not y0 == y1, "same label! at index {} and images: {} {}".format(index, x0, x1)
+        assert y0 != y1, "same label! at index {} and images: {} {}".format(index, x0, x1)
 
         label = bool(y0 > y1)
 
-        if self.split == 'train' and np.random.uniform() > 0.5:
+        if self.split == "train" and np.random.uniform() > 0.5:  # noqa: NPY002, PLR2004
             image0, image1, label = image1, image0, not label
 
-        label = torch.tensor([label]).float() # convert label to float
-        if self.split == 'train':
+        label = torch.tensor([label]).float()  # convert label to float
+        if self.split == "train":
             label = add_noise(label, mean=0.0, std=0.2)
         inverse = 1.0 - label
         return image0, image1, label, inverse
@@ -140,40 +195,44 @@ class ViewDataset(torch.utils.data.Dataset):
     def make_pairs(self):
         pairs = []
         for model in tqdm(self.models, "Making pairs"):
-            for tId in range(self.n_triplets):
+            for trip_id in range(self.n_triplets):
                 triplet = []
                 for i in range(3):
-                    img_path = Path("{}.off_camera_{}.jpg".format(model, 3 * tId + i))
-                    ano_path = Path("{}.off_camera_{}.json".format(model, 3 * tId + i))
+                    img_path = Path("{}.off_camera_{}.jpg".format(model, 3 * trip_id + i))
+                    ano_path = Path("{}.off_camera_{}.json".format(model, 3 * trip_id + i))
                     assert img_path.exists(), "Missing image file " + img_path.as_posix()
                     assert ano_path.exists(), "Missing anotation file " + ano_path.as_posix()
                     triplet.append((img_path.as_posix(), ano_path.as_posix()))
                 labels = [parse_label(f, self.use_failed, anno2int) for (_, f) in triplet]
                 if self.filter_agree:
-                    if (not len(labels[0]) == 2):
+                    if len(labels[0]) != 2:  # noqa: PLR2004
                         continue
-                    best_idx = 0 if labels[0][0] == 2.0 else 1 if labels[1][0] == 2.0 else 2
-                    if not labels[best_idx][1] == 2.0:
+                    best_idx = 0 if labels[0][0] == 2.0 else 1 if labels[1][0] == 2.0 else 2  # noqa: PLR2004
+                    if labels[best_idx][1] != 2.0:  # noqa: PLR2004
                         continue
                 for participant in range(len(labels[0])):
                     img0 = triplet[0][0]
                     img1 = triplet[1][0]
                     img2 = triplet[2][0]
-                    label0 = labels[0][participant] # best
-                    label1 = labels[1][participant] # middle
-                    label2 = labels[2][participant] # worst
+                    label0 = labels[0][participant]  # best
+                    label1 = labels[1][participant]  # middle
+                    label2 = labels[2][participant]  # worst
                     if self.use_triplets:
-                        pairs.append([[img0, label0], [img1, label1]]) # (A=Best, B= Middle)                    
-                        pairs.append([[img1, label1], [img2, label2]]) # (A=Middle, B=Worst)
-                    pairs.append([[img0, label0], [img2, label2]]) # (A=Best, B=Worst)
+                        pairs.append([[img0, label0], [img1, label1]])  # (A=Best, B= Middle)
+                        pairs.append([[img1, label1], [img2, label2]])  # (A=Middle, B=Worst)
+                    pairs.append([[img0, label0], [img2, label2]])  # (A=Best, B=Worst)
         return pairs
 
+
 class NeuralViewLabelDataset(torch.utils.data.Dataset):
-    def __init__(self, path, classes=[]) -> None:
+    def __init__(self, path, classes=None) -> None:
+        classes = classes or []
         super().__init__()
         self.classes = classes
-        self.images = [img for img in Path(path).glob("**/*") if img.suffix == ".jpg" and any([c in img.name for c in classes])]
-        self.models = sorted(list(set([model.as_posix().split(".off")[0] for model in self.images])))        
+        self.images = [
+            img for img in Path(path).glob("**/*") if img.suffix == ".jpg" and any(c in img.name for c in classes)
+        ]
+        self.models = sorted({model.as_posix().split(".off")[0] for model in self.images})
         print("Labeling images using classes: {}".format(self.classes))
         print("Found {} images.".format(len(self.images)))
         self.pairs = self.make_pairs()
@@ -189,8 +248,7 @@ class NeuralViewLabelDataset(torch.utils.data.Dataset):
         image0 = TF.to_tensor(image0)
         image1 = TF.to_tensor(image1)
 
-        return {'image0': image0, 'image1': image1, 'path0': x0.as_posix(), 'path1': x1.as_posix()}
-
+        return {"image0": image0, "image1": image1, "path0": x0.as_posix(), "path1": x1.as_posix()}
 
     def __getitem__(self, index):
         return self.get_raw(index)
@@ -206,5 +264,9 @@ class NeuralViewLabelDataset(torch.utils.data.Dataset):
         return pairs
 
 
-if __name__ == '__main__':
-    dataset = ViewDataset("G:/projects/3DAnnotation/additional_study", "train", classes=["airplane", "chair", "flower_pot", "sofa", "toilet"])
+if __name__ == "__main__":
+    dataset = ViewDataset(
+        "G:/projects/3DAnnotation/additional_study",
+        "train",
+        classes=["airplane", "chair", "flower_pot", "sofa", "toilet"],
+    )

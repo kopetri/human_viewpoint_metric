@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# uv / virtual environment
+.venv/
+.python-version
+
+# Ruff
+.ruff_cache/
+
+# PyTorch / Lightning checkpoints and logs
+*.ckpt
+*.pt
+*.pth
+lightning_logs/
+wandb/
+
+# Datasets and large files
+datasets/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log

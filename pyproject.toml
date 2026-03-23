@@ -1,0 +1,87 @@
+[project]
+name = "human-viewpoint-metric"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "lightning>=2.6.1",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.3",
+    "opencv-python>=4.13.0.92",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.17.1",
+    "torch>=2.10.0",
+    "torchvision>=0.25.0",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.5.1",
+    "ruff>=0.14.14",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.format]
+quote-style = "double"
+docstring-code-format = true
+docstring-code-line-length = 40
+indent-style = "space"
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "ARG",
+    "B",
+    "C",
+    "C4",
+    "COM",
+    "D103",
+    "E",
+    "F",
+    "G",
+    "I",
+    "INP",
+    "INT",
+    "ISC",
+    "N",
+    "NPY",
+    "PD",
+    "PIE",
+    "PL",
+    "PT",
+    "PYI",
+    "R",
+    "RET",
+    "RSE",
+    "RUF",
+    "SIM",
+    "SLF",
+    "TCH",
+    "TID",
+    "W",
+]
+
+ignore = [
+    "ISC001",
+    "COM812",
+    "INP001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["PLR2004", "SLF001", "A001", "PLR0915"]  # Allow magic values, private member access, shadowing builtins, and long functions in tests
+"learning/metrics.py" = ["N802", "N803", "N806", "ARG002"]  # Legacy metric API naming (compute_AUC, compute_AUPR, etc.)
+"learning/dataset.py" = ["N803", "N812"]  # imgA/imgB convention; TF is a standard torchvision alias
+"learning/model.py" = ["ARG002"]  # batch_idx is part of the Lightning hook interface
+"learning/trainer.py" = ["N812"]  # L is a standard lightning alias
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+[tool.ruff.lint.pylint]
+max-args = 10
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
