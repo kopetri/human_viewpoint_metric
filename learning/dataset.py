@@ -39,8 +39,6 @@ CLASSES = [
     "vase",
 ]
 
-HF_REPO_ID = "kopetri/human_viewpoint_preferences"
-
 
 def add_noise(label, mean=0.0, std=0.2):
     """Add Gaussian noise to a label, reverting if it changes the class."""
@@ -78,7 +76,7 @@ def data_augment(img_a, img_b, use_rot):
 class PreferencesDataset(torch.utils.data.Dataset):
     """Viewpoint score dataset loaded automatically from a HuggingFace dataset repo."""
 
-    def __init__(self, repo_id: str = HF_REPO_ID, split: str = "train", classes: list | None = None):
+    def __init__(self, repo_id: str, split: str = "train", classes: list | None = None):
         super().__init__()
         assert split in ["train", "test"]
         ds = load_dataset(repo_id, split=split)
@@ -106,9 +104,9 @@ class PreferencesDataset(torch.utils.data.Dataset):
 class PreferencesDataModule(L.LightningDataModule):
     def __init__(
         self,
-        repo_id: str = HF_REPO_ID,
-        batch_size: int = 16,
-        num_workers: int = 8,
+        repo_id: str,
+        batch_size: int,
+        num_workers: int,
         classes: list | None = None,
     ):
         super().__init__()
@@ -133,7 +131,7 @@ class ViewDataset(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        repo_id: str = HF_REPO_ID,
+        repo_id: str,
         split: str = "train",
         use_failed: bool = False,
         classes: list | None = None,
@@ -266,9 +264,9 @@ class ViewDataset(torch.utils.data.Dataset):
 class ViewDataModule(L.LightningDataModule):
     def __init__(
         self,
-        repo_id: str = HF_REPO_ID,
-        batch_size: int = 16,
-        num_workers: int = 8,
+        repo_id: str,
+        batch_size: int,
+        num_workers: int,
         classes: list | None = None,
         use_rot: bool = True,
         filter_agree: bool = False,
