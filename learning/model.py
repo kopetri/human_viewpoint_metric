@@ -1,27 +1,20 @@
-from argparse import Namespace
 from pathlib import Path
 from zipfile import ZipFile
 
-import lightning.pytorch as pl
+import lightning as L
+import lightning.pytorch.loggers as pl_loggers
 import torch
 
 from learning.metrics import BinaryClassMetrics, accuracy
 from learning.network import ViewModel
 
 
-class LightningModule(pl.LightningModule):
+class LightningModule(L.LightningModule):
     """Inlined from pytorch_utils.module — no external dependency needed."""
 
-    def __init__(self, opt=None, **kwargs):
+    def __init__(self, learning_rate: float):
         super().__init__()
-        if opt is None:
-            self.opt = Namespace(**kwargs)
-            if "hparams" in vars(self.opt):
-                self.opt = self.opt.hparams
-        else:
-            self.opt = opt
-        self.save_hyperparameters(vars(self.opt))
-        self.learning_rate = self.opt.learning_rate
+        self.learning_rate = learning_rate
         self.validation_outputs = []
 
     def training_step(self, batch, batch_idx):
@@ -46,11 +39,11 @@ class LightningModule(pl.LightningModule):
         )
 
     def log_image(self, key, images, **kwargs):
-        if self.logger and isinstance(self.logger, pl.loggers.WandbLogger):
+        if self.logger and isinstance(self.logger, pl_loggers.WandbLogger):
             self.logger.log_image(key=key, images=images, **kwargs)
 
     def on_save_checkpoint(self, _checkpoint) -> None:
-        if not (isinstance(self.logger, pl.loggers.WandbLogger) and getattr(self.opt, "save_code_base", False)):
+        if not (isinstance(self.logger, pl_loggers.WandbLogger) and getattr(self.opt, "save_code_base", False)):
             return
         path = Path(".", self.logger.experiment.project, self.logger.experiment.id, "code")
         zipfile = path / "code.zip"
@@ -69,15 +62,28 @@ class LightningModule(pl.LightningModule):
         raise NotImplementedError
 
 
-class ViewQualityModel(LightningModule):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        decoder = self.opt.decoder if "decoder" in self.opt else "binary"
+class ViewpointRankingModel(LightningModule):
+    def __init__(
+        self,
+        learning_rate: float = 1e-4,
+        mlp_layers: list | None = None,
+        dropout: float = 0.2,
+        decoder: str = "binary",
+        learning_rate_decay: float = 0.0,
+        reduce_lr_on_plateau: int = 0,
+    ):
+        super().__init__(learning_rate=learning_rate)
+        self.mlp_layers = mlp_layers or [256, 64]
+        self.dropout = dropout
+        self.decoder = decoder
+        self.learning_rate_decay = learning_rate_decay
+        self.reduce_lr_on_plateau = reduce_lr_on_plateau
+        self.save_hyperparameters()
         self.model = ViewModel(
-            mlp_layers=self.opt.mlp_layers,
-            dropout=self.opt.dropout,
+            mlp_layers=self.mlp_layers,
+            dropout=self.dropout,
             sigmoid=False,
-            decoder=decoder,
+            decoder=self.decoder,
         )
         self.criterion = torch.nn.BCEWithLogitsLoss()
         self.metrics = BinaryClassMetrics()
@@ -86,14 +92,14 @@ class ViewQualityModel(LightningModule):
         self.gt = []
 
     def get_prediction(self, x0, x1):
-        if "decoder" not in self.opt or self.opt.decoder == "binary":
+        if self.decoder == "binary":
             y_hat = self.model(x0, x1)
-        elif self.opt.decoder == "goodness":
+        elif self.decoder == "goodness":
             score0 = self.model(x0)
             score1 = self.model(x1)
             y_hat = score0 - score1
         else:
-            raise ValueError(self.opt.decoder)
+            raise ValueError(self.decoder)
         return y_hat
 
     def forward(self, batch, batch_idx, split):
@@ -124,26 +130,26 @@ class ViewQualityModel(LightningModule):
         return y, y_inv, y_hat, y_hat_inv
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.opt.learning_rate)
-        if self.opt.learning_rate_decay > 0:
-            print("Adding learning rate decay: {}".format(self.opt.learning_rate_decay))
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        if self.learning_rate_decay > 0:
+            print("Adding learning rate decay: {}".format(self.learning_rate_decay))
             scheduler = {
                 "scheduler": torch.optim.lr_scheduler.MultiplicativeLR(
                     optimizer,
-                    lr_lambda=[lambda _: self.opt.learning_rate_decay],
+                    lr_lambda=[lambda _: self.learning_rate_decay],
                 ),
                 "interval": "step",
                 "frequency": 1,
                 "strict": True,
             }
             return [optimizer], [scheduler]
-        if self.opt.reduce_lr_on_plateau > 0:
+        if self.reduce_lr_on_plateau > 0:
             print("Adding learning rate scheduler on plateau")
             scheduler = {
                 "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                     optimizer,
                     "min",
-                    patience=self.opt.reduce_lr_on_plateau,
+                    patience=self.reduce_lr_on_plateau,
                 ),
                 "monitor": "val_loss",
             }
@@ -151,7 +157,64 @@ class ViewQualityModel(LightningModule):
         return optimizer
 
 
-class LabelingModel(pl.LightningModule):
+class ViewpointScoreModel(LightningModule):
+    """Regresses a single image to a normalised human view-preference score in [0, 1]."""
+
+    def __init__(
+        self,
+        learning_rate: float = 1e-4,
+        mlp_layers: list | None = None,
+        dropout: float = 0.2,
+        learning_rate_decay: float = 0.0,
+        reduce_lr_on_plateau: int = 0,
+    ):
+        super().__init__(learning_rate=learning_rate)
+        self.mlp_layers = mlp_layers or [256, 64]
+        self.dropout = dropout
+        self.learning_rate_decay = learning_rate_decay
+        self.reduce_lr_on_plateau = reduce_lr_on_plateau
+        self.save_hyperparameters()
+        self.model = ViewModel(
+            mlp_layers=self.mlp_layers,
+            dropout=self.dropout,
+            sigmoid=False,
+            decoder="goodness",
+        )
+        self.criterion = torch.nn.MSELoss()
+
+    def forward(self, batch, batch_idx, split):
+        image, score = batch
+        batch_size = image.shape[0]
+        pred = self.model(image).sigmoid()  # (B, 1) → [0, 1]
+        loss = self.criterion(pred, score)
+        self.log_value("loss", loss, split, batch_size)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        if self.learning_rate_decay > 0:
+            scheduler = {
+                "scheduler": torch.optim.lr_scheduler.MultiplicativeLR(
+                    optimizer,
+                    lr_lambda=[lambda _: self.learning_rate_decay],
+                ),
+                "interval": "step",
+                "frequency": 1,
+                "strict": True,
+            }
+            return [optimizer], [scheduler]
+        if self.reduce_lr_on_plateau > 0:
+            scheduler = {
+                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                    optimizer, "min", patience=self.reduce_lr_on_plateau
+                ),
+                "monitor": "valid_loss",
+            }
+            return [optimizer], [scheduler]
+        return optimizer
+
+
+class LabelingModel(L.LightningModule):
     def __init__(self, hparams):
         super().__init__()
         self.model = ViewModel(mlp_layers=hparams.mlp_layers, dropout=hparams.dropout, sigmoid=False)

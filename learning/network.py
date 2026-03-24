@@ -88,7 +88,7 @@ class Decoder(nn.Module):
         return x
 
 
-class GoodnessScoreDecoder(nn.Module):
+class ViewpointScoreDecoder(nn.Module):
     def __init__(self, latent_size=128, dropout=0.5, n_features=None):
         n_features = n_features or [128, 32]
         super().__init__()
@@ -113,7 +113,7 @@ class ViewModel(nn.Module):
         if decoder == "binary":
             self.decoder = Decoder(latent_size=128, dropout=dropout, n_features=mlp_layers, apply_sigmoid=sigmoid)
         elif decoder == "goodness":
-            self.decoder = GoodnessScoreDecoder(latent_size=128, dropout=dropout, n_features=mlp_layers)
+            self.decoder = ViewpointScoreDecoder(latent_size=128, dropout=dropout, n_features=mlp_layers)
 
     def forward(self, x0, x1=None):
         x0 = self.encoder(x0)
@@ -125,7 +125,7 @@ class ViewModel(nn.Module):
 
 if __name__ == "__main__":
     encoder = EncoderSimple(latent_size=128, img_size=128)
-    decoder = GoodnessScoreDecoder(latent_size=128, n_features=[128, 32])
+    decoder = ViewpointScoreDecoder(latent_size=128, n_features=[128, 32])
     img = torch.rand((16, 3, 128, 128))
     latent0 = encoder(img)
     latent1 = encoder(img)

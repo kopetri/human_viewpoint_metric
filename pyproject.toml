@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
+    "datasets>=4.8.4",
+    "huggingface-hub[cli]>=1.7.2",
+    "jsonargparse[signatures]>=4.47.0",
     "lightning>=2.6.1",
     "matplotlib>=3.10.8",
     "numpy>=2.4.3",
@@ -74,7 +77,7 @@ ignore = [
 "tests/**/*.py" = ["PLR2004", "SLF001", "A001", "PLR0915"]  # Allow magic values, private member access, shadowing builtins, and long functions in tests
 "learning/metrics.py" = ["N802", "N803", "N806", "ARG002"]  # Legacy metric API naming (compute_AUC, compute_AUPR, etc.)
 "learning/dataset.py" = ["N803", "N812"]  # imgA/imgB convention; TF is a standard torchvision alias
-"learning/model.py" = ["ARG002"]  # batch_idx is part of the Lightning hook interface
+"learning/model.py" = ["ARG002", "N812"]  # batch_idx is part of the Lightning hook interface; L is a standard lightning alias
 "learning/trainer.py" = ["N812"]  # L is a standard lightning alias
 
 [tool.ruff.lint.mccabe]

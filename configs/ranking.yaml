@@ -1,0 +1,22 @@
+seed_everything: true
+trainer:
+  accelerator: auto
+  devices: auto
+  precision: 16-mixed
+  max_epochs: 50
+  log_every_n_steps: 50
+model:
+  class_path: learning.model.ViewpointRankingModel
+  init_args:
+    learning_rate: 0.0001
+    mlp_layers:
+      - 256
+      - 64
+    dropout: 0.2
+    decoder: binary
+data:
+  class_path: learning.dataset.ViewDataModule
+  init_args:
+    repo_id: kopetri/human_viewpoint_preferences  # auto-downloaded from HuggingFace
+    batch_size: 16
+    num_workers: 8
