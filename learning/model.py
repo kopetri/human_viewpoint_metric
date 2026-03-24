@@ -70,7 +70,7 @@ class LightningModule(L.LightningModule):
         raise NotImplementedError
 
 
-class ViewQualityModel(LightningModule):
+class ViewpointRankingModel(LightningModule):
     def __init__(
         self,
         learning_rate: float = 1e-4,

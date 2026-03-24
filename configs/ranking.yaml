@@ -6,7 +6,7 @@ trainer:
   max_epochs: 50
   log_every_n_steps: 50
 model:
-  class_path: learning.model.ViewQualityModel
+  class_path: learning.model.ViewpointRankingModel
   init_args:
     learning_rate: 0.0001
     mlp_layers:

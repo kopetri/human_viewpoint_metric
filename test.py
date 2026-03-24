@@ -6,7 +6,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 
 from learning.dataset import CLASSES, ViewDataset
-from learning.model import ViewQualityModel
+from learning.model import ViewpointRankingModel
 from learning.trainer import parse_ckpt
 
 if __name__ == "__main__":
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ckpt = parse_ckpt(args.ckpt)
-    model = ViewQualityModel.load_from_checkpoint(ckpt)
+    model = ViewpointRankingModel.load_from_checkpoint(ckpt)
 
     test_dataset = ViewDataset(
         path=args.dataset_path,
