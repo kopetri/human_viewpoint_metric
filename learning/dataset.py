@@ -75,7 +75,7 @@ def data_augment(img_a, img_b, use_rot):
     return img_a, img_b
 
 
-class HFPreferencesDataset(torch.utils.data.Dataset):
+class PreferencesDataset(torch.utils.data.Dataset):
     """Viewpoint score dataset loaded automatically from a HuggingFace dataset repo."""
 
     def __init__(self, repo_id: str = HF_REPO_ID, split: str = "train", classes: list | None = None):
@@ -91,7 +91,7 @@ class HFPreferencesDataset(torch.utils.data.Dataset):
         score_col = ds["viewpoint_score"]
         ds = ds.select([i for i, s in enumerate(score_col) if s is not None])
         self.ds = ds
-        print(f"HFPreferencesDataset [{split}]: {len(self.ds)} images")
+        print(f"PreferencesDataset [{split}]: {len(self.ds)} images")
 
     def __len__(self):
         return len(self.ds)
@@ -118,17 +118,17 @@ class PreferencesDataModule(L.LightningDataModule):
         self.classes = classes
 
     def train_dataloader(self):
-        dataset = HFPreferencesDataset(repo_id=self.repo_id, split="train", classes=self.classes)
+        dataset = PreferencesDataset(repo_id=self.repo_id, split="train", classes=self.classes)
         return DataLoader(
             dataset, batch_size=self.batch_size, shuffle=True, drop_last=True, num_workers=self.num_workers
         )
 
     def val_dataloader(self):
-        dataset = HFPreferencesDataset(repo_id=self.repo_id, split="test", classes=self.classes)
+        dataset = PreferencesDataset(repo_id=self.repo_id, split="test", classes=self.classes)
         return DataLoader(dataset, batch_size=1, shuffle=False, num_workers=self.num_workers)
 
 
-class HFViewDataset(torch.utils.data.Dataset):
+class ViewDataset(torch.utils.data.Dataset):
     """Ranking-pair dataset loaded automatically from a HuggingFace dataset repo."""
 
     def __init__(
@@ -288,7 +288,7 @@ class ViewDataModule(L.LightningDataModule):
         self.n_models = n_models
 
     def train_dataloader(self):
-        dataset = HFViewDataset(
+        dataset = ViewDataset(
             repo_id=self.repo_id,
             split="train",
             use_rot=self.use_rot,
@@ -304,7 +304,7 @@ class ViewDataModule(L.LightningDataModule):
         )
 
     def val_dataloader(self):
-        dataset = HFViewDataset(
+        dataset = ViewDataset(
             repo_id=self.repo_id,
             split="valid",
             use_rot=False,
