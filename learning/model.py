@@ -1,4 +1,3 @@
-from argparse import Namespace
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -13,16 +12,9 @@ from learning.network import ViewModel
 class LightningModule(L.LightningModule):
     """Inlined from pytorch_utils.module — no external dependency needed."""
 
-    def __init__(self, opt=None, **kwargs):
+    def __init__(self, learning_rate: float):
         super().__init__()
-        if opt is None:
-            self.opt = Namespace(**kwargs)
-            if "hparams" in vars(self.opt):
-                self.opt = self.opt.hparams
-        else:
-            self.opt = opt
-        self.save_hyperparameters(vars(self.opt))
-        self.learning_rate = self.opt.learning_rate
+        self.learning_rate = learning_rate
         self.validation_outputs = []
 
     def training_step(self, batch, batch_idx):
@@ -80,20 +72,18 @@ class ViewpointRankingModel(LightningModule):
         learning_rate_decay: float = 0.0,
         reduce_lr_on_plateau: int = 0,
     ):
-        super().__init__(
-            learning_rate=learning_rate,
-            mlp_layers=mlp_layers or [256, 64],
-            dropout=dropout,
-            decoder=decoder,
-            learning_rate_decay=learning_rate_decay,
-            reduce_lr_on_plateau=reduce_lr_on_plateau,
-        )
-        decoder = self.opt.decoder if "decoder" in self.opt else "binary"
+        super().__init__(learning_rate=learning_rate)
+        self.mlp_layers = mlp_layers or [256, 64]
+        self.dropout = dropout
+        self.decoder = decoder
+        self.learning_rate_decay = learning_rate_decay
+        self.reduce_lr_on_plateau = reduce_lr_on_plateau
+        self.save_hyperparameters()
         self.model = ViewModel(
-            mlp_layers=self.opt.mlp_layers,
-            dropout=self.opt.dropout,
+            mlp_layers=self.mlp_layers,
+            dropout=self.dropout,
             sigmoid=False,
-            decoder=decoder,
+            decoder=self.decoder,
         )
         self.criterion = torch.nn.BCEWithLogitsLoss()
         self.metrics = BinaryClassMetrics()
@@ -102,14 +92,14 @@ class ViewpointRankingModel(LightningModule):
         self.gt = []
 
     def get_prediction(self, x0, x1):
-        if "decoder" not in self.opt or self.opt.decoder == "binary":
+        if self.decoder == "binary":
             y_hat = self.model(x0, x1)
-        elif self.opt.decoder == "goodness":
+        elif self.decoder == "goodness":
             score0 = self.model(x0)
             score1 = self.model(x1)
             y_hat = score0 - score1
         else:
-            raise ValueError(self.opt.decoder)
+            raise ValueError(self.decoder)
         return y_hat
 
     def forward(self, batch, batch_idx, split):
@@ -140,26 +130,26 @@ class ViewpointRankingModel(LightningModule):
         return y, y_inv, y_hat, y_hat_inv
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.opt.learning_rate)
-        if self.opt.learning_rate_decay > 0:
-            print("Adding learning rate decay: {}".format(self.opt.learning_rate_decay))
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        if self.learning_rate_decay > 0:
+            print("Adding learning rate decay: {}".format(self.learning_rate_decay))
             scheduler = {
                 "scheduler": torch.optim.lr_scheduler.MultiplicativeLR(
                     optimizer,
-                    lr_lambda=[lambda _: self.opt.learning_rate_decay],
+                    lr_lambda=[lambda _: self.learning_rate_decay],
                 ),
                 "interval": "step",
                 "frequency": 1,
                 "strict": True,
             }
             return [optimizer], [scheduler]
-        if self.opt.reduce_lr_on_plateau > 0:
+        if self.reduce_lr_on_plateau > 0:
             print("Adding learning rate scheduler on plateau")
             scheduler = {
                 "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
                     optimizer,
                     "min",
-                    patience=self.opt.reduce_lr_on_plateau,
+                    patience=self.reduce_lr_on_plateau,
                 ),
                 "monitor": "val_loss",
             }
@@ -178,16 +168,15 @@ class ViewpointScoreModel(LightningModule):
         learning_rate_decay: float = 0.0,
         reduce_lr_on_plateau: int = 0,
     ):
-        super().__init__(
-            learning_rate=learning_rate,
-            mlp_layers=mlp_layers or [256, 64],
-            dropout=dropout,
-            learning_rate_decay=learning_rate_decay,
-            reduce_lr_on_plateau=reduce_lr_on_plateau,
-        )
+        super().__init__(learning_rate=learning_rate)
+        self.mlp_layers = mlp_layers or [256, 64]
+        self.dropout = dropout
+        self.learning_rate_decay = learning_rate_decay
+        self.reduce_lr_on_plateau = reduce_lr_on_plateau
+        self.save_hyperparameters()
         self.model = ViewModel(
-            mlp_layers=self.opt.mlp_layers,
-            dropout=self.opt.dropout,
+            mlp_layers=self.mlp_layers,
+            dropout=self.dropout,
             sigmoid=False,
             decoder="goodness",
         )
@@ -202,22 +191,22 @@ class ViewpointScoreModel(LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.opt.learning_rate)
-        if self.opt.learning_rate_decay > 0:
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        if self.learning_rate_decay > 0:
             scheduler = {
                 "scheduler": torch.optim.lr_scheduler.MultiplicativeLR(
                     optimizer,
-                    lr_lambda=[lambda _: self.opt.learning_rate_decay],
+                    lr_lambda=[lambda _: self.learning_rate_decay],
                 ),
                 "interval": "step",
                 "frequency": 1,
                 "strict": True,
             }
             return [optimizer], [scheduler]
-        if self.opt.reduce_lr_on_plateau > 0:
+        if self.reduce_lr_on_plateau > 0:
             scheduler = {
                 "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    optimizer, "min", patience=self.opt.reduce_lr_on_plateau
+                    optimizer, "min", patience=self.reduce_lr_on_plateau
                 ),
                 "monitor": "valid_loss",
             }
