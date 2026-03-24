@@ -17,6 +17,6 @@ model:
 data:
   class_path: learning.dataset.ViewDataModule
   init_args:
-    dataset_path: null  # required: path to human_viewpoint_metric dataset
+    repo_id: kopetri/human_viewpoint_preferences  # auto-downloaded from HuggingFace
     batch_size: 16
     num_workers: 8

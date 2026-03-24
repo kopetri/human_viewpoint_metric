@@ -16,7 +16,6 @@ model:
 data:
   class_path: learning.dataset.PreferencesDataModule
   init_args:
-    metric_path: null  # required: path to human_viewpoint_metric folder
-    prefs_path: null   # required: path to human_view_preferences folder
+    repo_id: kopetri/human_viewpoint_preferences  # auto-downloaded from HuggingFace
     batch_size: 16
     num_workers: 8

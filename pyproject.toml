@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
+    "datasets>=4.8.4",
+    "huggingface-hub[cli]>=1.7.2",
     "jsonargparse[signatures]>=4.47.0",
     "lightning>=2.6.1",
     "matplotlib>=3.10.8",
