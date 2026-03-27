@@ -128,3 +128,9 @@ image0    : view_a.png
 image1    : view_b.png
 preferred : view_a.png  (margin = 0.4624, p(image0) = 0.7312)
 ```
+
+## Checkpoints
+| Task | Checkpoint |
+| :--- | :--- |
+| **Ranking** | rank_model.ckpt |
+| **Scoring** | [score_model.ckpt](https://huggingface.co/datasets/kopetri/human_viewpoint_preferences/resolve/main/score_model.ckpt) |
