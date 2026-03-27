@@ -99,18 +99,21 @@ uv run run.py test --config configs/ranking.yaml \
 
 ### Score — predict the viewpoint quality of one or more images
 
+
 ```console
 uv run infer.py score \
-    --ckpt model.ckpt \
-    --image view_a.png view_b.png
+    --ckpt score_model.ckpt \
+    --image imgs/viewpoint_a.jpg imgs/viewpoint_b.jpg imgs/viewpoint_c.jpg
 ```
 
 Output:
 
 ```
-view_a.png    score = 0.7312
-view_b.png    score = 0.2891
+viewpoint_a.jpg        score = 0.5942
+viewpoint_b.jpg        score = 0.5839
+viewpoint_c.jpg        score = 0.7846
 ```
+ ![viewpoint_a](imgs/viewpoint_a.jpg)  ![viewpoint_b](imgs/viewpoint_b.jpg)  ![viewpoint_c](imgs/viewpoint_c.jpg) 
 
 ### Rank — compare two images and predict which viewpoint is preferred
 
